@@ -17,15 +17,25 @@ var mockApi = (req, res) => {
 }
 
 module.exports = {
-  entry: './src/index.ts',
+  entry: './src/index.js',
   mode: 'development',
-  devtool: false,
+  devtool: 'eval-source-map',
   module: {
     rules: [
       {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
+      },
+      {
+        test: /\.js$/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env'],
+            plugins: [['@babel/plugin-transform-react-jsx', { pragma: 'Didact.createElement' }]]
+          }
+        }
       },
       {
         test: /\.css$/,

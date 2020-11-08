@@ -30,12 +30,16 @@ function createTextElement(text) {
 function render(element, container) {
     let node = element.type === '#text' ? document.createTextNode("") : document.createElement(element.type);
     for (let attributeName in element.props) {
-        if (attributeName !== 'children') {
+    if(attributeName.startsWith('on')){
+        node.addEventListener(
+            attributeName.toLowerCase().substring(2),
+            element.props[attributeName]
+        )
+    }
+    else if (attributeName !== 'children') {
             node[attributeName] = element.props[attributeName];
         } else {
             for (let child of element.props.children) {
-                console.log('child: ', child)
-                // node.appendChild(child);
                 render(child, node);
             }
         }
@@ -73,12 +77,21 @@ function performUnitOfWork(fiber) {
 
 // ===================== real app ====================
 
-const element = (
-    <div style="background: salmon">
-        <h1>Hello World</h1>
-        <h2 style="text-align:right">from Didact</h2>
-    </div>
-);
-
 const container = document.getElementById('root');
-Didact.render(element, container);
+
+const updateValue = e => {
+    rerender(e.target.value);
+}
+
+const rerender = (value) => {
+    const element = (
+        <div>
+            <input onInput={updateValue} value={value}></input>
+            <h2>Hello {value}</h2>
+        </div>
+    )
+    container.innerHTML = '';
+    Didact.render(element, container);
+}
+
+rerender("World");

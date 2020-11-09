@@ -114,11 +114,37 @@ function reconcileChildren(wipFiber, elements) {
                 type: element.type,
                 props: element.props,
                 dom: oldFiber.dom,
-                parant: wipFiber,
+                parent: wipFiber,
                 alternate: oldFiber,
                 effectTag: 'UPDATE'
             }
         }
+
+        if (newFiber && !sameType) {
+            newFiber = {
+                type: element.type,
+                props: element.props,
+                dom: null,
+                parent: wipFiber,
+                alternate: null,
+                effectTag: "PLACEMENT"
+            }
+        }
+
+        if (oldFiber && !sameType) {
+            oldFiber.effectTag = "DELETION"
+            deletions.push(oldFiber)
+        }
+
+        if (oldFiber) {
+            oldFiber = oldFiber.sibling
+        }
+
+        if (index == 0) {
+            wipFiber.child = newFiber
+        }
+
+        index++
     }
 
     // compare

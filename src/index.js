@@ -27,24 +27,39 @@ function createTextElement(text) {
     }
 }
 
+let wipRoot = null;  // fiber
+let currentRoot = null;  // ? what type?
+let nextUnitOfWork = null;
+let deletions = null;
+
 function render(element, container) {
-    let node = element.type === '#text' ? document.createTextNode("") : document.createElement(element.type);
-    for (let attributeName in element.props) {
-    if(attributeName.startsWith('on')){
-        node.addEventListener(
-            attributeName.toLowerCase().substring(2),
-            element.props[attributeName]
-        )
+    // let node = element.type === '#text' ? document.createTextNode("") : document.createElement(element.type);
+    // for (let attributeName in element.props) {
+    // if(attributeName.startsWith('on')){
+    //     node.addEventListener(
+    //         attributeName.toLowerCase().substring(2),
+    //         element.props[attributeName]
+    //     )
+    // }
+    // else if (attributeName !== 'children') {
+    //         node[attributeName] = element.props[attributeName];
+    //     } else {
+    //         for (let child of element.props.children) {
+    //             render(child, node);
+    //         }
+    //     }
+    // }
+    // container.appendChild(node);
+
+    wipRoot = {
+        dom: container,
+        props: {
+            children: [element],
+        },
+        alternate: currentRoot
     }
-    else if (attributeName !== 'children') {
-            node[attributeName] = element.props[attributeName];
-        } else {
-            for (let child of element.props.children) {
-                render(child, node);
-            }
-        }
-    }
-    container.appendChild(node);
+    deletions = []
+    nextUnitOfWork = wipRoot
 }
 
 const Didact = {
@@ -53,8 +68,8 @@ const Didact = {
 }
 
 // ===================== fiber    ====================
-let nextUnitOfWork = 0;
 function workLoop(deadline) {
+    console.log('loop', nextUnitOfWork)
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     requestIdleCallback(workLoop);
 }
@@ -62,8 +77,51 @@ function workLoop(deadline) {
 requestIdleCallback(workLoop);
 
 function performUnitOfWork(fiber) {
-    console.log(fiber);
-    return fiber + 1
+    if (!fiber.dom) {
+        fiber.dom = createDom(fiber);
+    }
+
+    reconcileChildren(fiber.props.children);
+
+    if (fiber.child) {
+        return fiber.child;
+    }
+    let nextFiber = fiber;
+    while (nextFiber) {
+        if (nextFiber.sibling) {
+            return nextFiber.sibling;
+        }
+        nextFiber = nextFiber.parent
+    }
+    // return fiber + 1
+}
+
+function reconcileChildren(wipFiber, elements) {
+    let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
+
+    let index = 0;
+    while (index < elements.length || oldFiber !== null) {
+        const element = elements[index];
+
+        const sameType =
+            oldFiber &&
+            element &&
+            element.type === oldFiber.type
+        
+        let newFiber = null;
+        if (sameType) {
+            newFiber = {
+                type: element.type,
+                props: element.props,
+                dom: oldFiber.dom,
+                parant: wipFiber,
+                alternate: oldFiber,
+                effectTag: 'UPDATE'
+            }
+        }
+    }
+
+    // compare
 }
 
 // let time = 0;

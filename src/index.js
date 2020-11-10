@@ -93,19 +93,32 @@ function commitWork(fiber) {
         return
     }
 
-    const domParent = fiber.parent.dom
+    let domParentFiber = fiber.parent
+    while(!domParentFiber.dom) {
+        domParentFiber = domParentFiber.parent
+    }
+
+    const domParent = domParentFiber.dom
     if (fiber.effectTag === "PLACEMENT" && fiber.dom !== null) {
         domParent.appendChild(fiber.dom)
     } else if (fiber.effectTag === "UPDATE" && fiber.dom !== null) {
         updateDom(fiber.dom, fiber.alternate.props, fiber.props)
     } else if (fiber.effectTag === "DELETION") {
-        domParent.removeChild(fiber.dom);
+        commitDeletion(fiber.dom, domParent);
     }
 
 
     commitWork(fiber.child)
     commitWork(fiber.sibling)
 } 
+
+function commitDeletion(fiber, domParent) {
+    if (fiber.dom) {
+        domParent.removeChild(fiber.dom)
+    } else {
+        commitDeletion(fiber.child, domParent);
+    }
+}
 
 let wipRoot = null;  // new root fiber
 let currentRoot = null;  // old root fiber
@@ -143,11 +156,12 @@ function workLoop(deadline) {
 requestIdleCallback(workLoop);
 
 function performUnitOfWork(fiber) {
-    if (!fiber.dom) {
-        fiber.dom = createDom(fiber);
+    const isFunctionComponent = fiber.type instanceof Function;
+    if (isFunctionComponent) {
+        updateFunctionComponent(fiber);
+    } else {
+        updateHostComponent(fiber);
     }
-
-    reconcileChildren(fiber, fiber.props.children);
 
     if (fiber.child) {
         return fiber.child;
@@ -161,8 +175,21 @@ function performUnitOfWork(fiber) {
     }
 }
 
-function reconcileChildren(wipFiber, elements) {
-    let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
+function updateFunctionComponent(fiber) {
+    const children = [fiber.type(fiber.props)];
+    reconcileChildren(fiber, children);
+}
+
+function updateHostComponent(fiber) {
+    if (!fiber.dom) {
+        fiber.dom = createDom(fiber);
+    }
+
+    reconcileChildren(fiber, fiber.props.children);
+}
+
+function reconcileChildren(parentFiber, elements) {
+    let oldFiber = parentFiber.alternate && parentFiber.alternate.child;
 
     let index = 0;
     let prevSibling = null;
@@ -180,7 +207,7 @@ function reconcileChildren(wipFiber, elements) {
                 type: element.type,
                 props: element.props,
                 dom: oldFiber.dom,
-                parent: wipFiber,
+                parent: parentFiber,
                 alternate: oldFiber,
                 effectTag: 'UPDATE'
             }
@@ -191,7 +218,7 @@ function reconcileChildren(wipFiber, elements) {
                 type: element.type,
                 props: element.props,
                 dom: null,
-                parent: wipFiber,
+                parent: parentFiber,
                 alternate: null,
                 effectTag: "PLACEMENT"
             }
@@ -207,7 +234,7 @@ function reconcileChildren(wipFiber, elements) {
         }
 
         if (index == 0) {
-            wipFiber.child = newFiber
+            parentFiber.child = newFiber
         } else {
             prevSibling.sibling = newFiber
         }
@@ -220,21 +247,17 @@ function reconcileChildren(wipFiber, elements) {
 
 
 // ===================== real app ====================
+function Counter() {
+    // const [state, setState] = Didact.useState(1);
 
-const container = document.getElementById('root');
-
-const updateValue = e => {
-    rerender(e.target.value);
-}
-
-const rerender = (value) => {
-    const element = (
-        <div>
-            <input onInput={updateValue} value={value}></input>
-            <h2>Hello {value}</h2>
-        </div>
+    return (
+        <h1  style="user-select: none">
+            Count: {1}
+        </h1>
     )
-    Didact.render(element, container);
 }
 
-rerender("World");
+const element = <Counter />
+const container = document.getElementById('root');
+Didact.render(element, container);
+

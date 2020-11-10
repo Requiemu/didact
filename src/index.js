@@ -1,7 +1,6 @@
 import './style.css';
 
 function createElement(type, props, ...children) {
-    console.log('createElement: ', type, props, children);
     return {
         type,
         props: {
@@ -27,30 +26,93 @@ function createTextElement(text) {
     }
 }
 
-let wipRoot = null;  // fiber
-let currentRoot = null;  // ? what type?
+function createDom(fiber) {
+    const dom =
+        fiber.type == "#text"
+            ? document.createTextNode("")
+            : document.createElement(fiber.type)
+
+    updateDom(dom, {}, fiber.props)
+
+    return dom
+}
+
+const isEvent = key => key.startsWith("on");
+const isProperty = key => key !== 'children' && !isEvent(key)
+const isNew = (prev, next) => (key => prev[key] !== next[key]);
+const isGone = (prev, next) => (key => !(key in next));
+function updateDom(dom, prevProps, nextProps) {
+    // Remove updated event listener
+    Object.keys(prevProps)
+    .filter(isEvent)
+    .filter(
+        isNew(prevProps, nextProps)
+    ).forEach(name => {
+        const eventType = name.toLowerCase().substring(2);
+        dom.removeEventListener(
+            eventType,
+            prevProps[name]
+        )
+    })
+
+    // Remove old properties
+    Object.keys(prevProps)
+    .filter(isProperty)
+    .filter(isGone(prevProps, nextProps))
+    .forEach((key) => {
+        dom[key] = ""
+    })
+
+    // Update new properties
+    Object.keys(nextProps)
+    .filter(isProperty)
+    .filter(isNew(prevProps, nextProps))
+    .forEach((key) => {
+        dom[key] = nextProps[key]
+    })
+
+    // Add new event listeners
+    Object.keys(nextProps)
+    .filter(isEvent)
+    .filter(isNew(prevProps, nextProps))
+    .forEach((key) => {
+        const eventName = key.toLowerCase().substring(2);
+        dom.addEventListener(eventName, nextProps[key]);
+    })
+}
+
+function commitRoot() {
+    deletions.forEach(commitWork)
+    commitWork(wipRoot.child)
+    currentRoot = wipRoot
+    wipRoot = null
+}
+
+function commitWork(fiber) {
+    if (!fiber) {
+        return
+    }
+
+    const domParent = fiber.parent.dom
+    if (fiber.effectTag === "PLACEMENT" && fiber.dom !== null) {
+        domParent.appendChild(fiber.dom)
+    } else if (fiber.effectTag === "UPDATE" && fiber.dom !== null) {
+        updateDom(fiber.dom, fiber.alternate.props, fiber.props)
+    } else if (fiber.effectTag === "DELETION") {
+        domParent.removeChild(fiber.dom);
+    }
+
+
+    commitWork(fiber.child)
+    commitWork(fiber.sibling)
+} 
+
+let wipRoot = null;  // new root fiber
+let currentRoot = null;  // old root fiber
 let nextUnitOfWork = null;
 let deletions = null;
 
 function render(element, container) {
-    // let node = element.type === '#text' ? document.createTextNode("") : document.createElement(element.type);
-    // for (let attributeName in element.props) {
-    // if(attributeName.startsWith('on')){
-    //     node.addEventListener(
-    //         attributeName.toLowerCase().substring(2),
-    //         element.props[attributeName]
-    //     )
-    // }
-    // else if (attributeName !== 'children') {
-    //         node[attributeName] = element.props[attributeName];
-    //     } else {
-    //         for (let child of element.props.children) {
-    //             render(child, node);
-    //         }
-    //     }
-    // }
-    // container.appendChild(node);
-
     wipRoot = {
         dom: container,
         props: {
@@ -69,8 +131,12 @@ const Didact = {
 
 // ===================== fiber    ====================
 function workLoop(deadline) {
-    console.log('loop', nextUnitOfWork)
-    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    while (nextUnitOfWork) {
+        nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
+    }
+    if (!nextUnitOfWork && wipRoot) {
+        commitRoot();
+    }
     requestIdleCallback(workLoop);
 }
 
@@ -81,7 +147,7 @@ function performUnitOfWork(fiber) {
         fiber.dom = createDom(fiber);
     }
 
-    reconcileChildren(fiber.props.children);
+    reconcileChildren(fiber, fiber.props.children);
 
     if (fiber.child) {
         return fiber.child;
@@ -93,21 +159,21 @@ function performUnitOfWork(fiber) {
         }
         nextFiber = nextFiber.parent
     }
-    // return fiber + 1
 }
 
 function reconcileChildren(wipFiber, elements) {
     let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
 
     let index = 0;
-    while (index < elements.length || oldFiber !== null) {
+    let prevSibling = null;
+    while (index < elements.length || oldFiber) {
         const element = elements[index];
 
         const sameType =
             oldFiber &&
             element &&
             element.type === oldFiber.type
-        
+
         let newFiber = null;
         if (sameType) {
             newFiber = {
@@ -120,7 +186,7 @@ function reconcileChildren(wipFiber, elements) {
             }
         }
 
-        if (newFiber && !sameType) {
+        if (element && !sameType) {
             newFiber = {
                 type: element.type,
                 props: element.props,
@@ -142,21 +208,15 @@ function reconcileChildren(wipFiber, elements) {
 
         if (index == 0) {
             wipFiber.child = newFiber
+        } else {
+            prevSibling.sibling = newFiber
         }
 
+
+        prevSibling = newFiber
         index++
     }
-
-    // compare
 }
-
-// let time = 0;
-// setTimeout(() => {
-//     while (time < 20000) {
-//         time++;
-//         console.log('block');
-//     }
-// }, 2000);
 
 
 // ===================== real app ====================
@@ -174,7 +234,6 @@ const rerender = (value) => {
             <h2>Hello {value}</h2>
         </div>
     )
-    container.innerHTML = '';
     Didact.render(element, container);
 }
 

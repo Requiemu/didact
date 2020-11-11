@@ -137,11 +137,6 @@ function render(element, container) {
     nextUnitOfWork = wipRoot
 }
 
-const Didact = {
-    createElement,
-    render
-}
-
 // ===================== fiber    ====================
 function workLoop(deadline) {
     while (nextUnitOfWork) {
@@ -175,13 +170,46 @@ function performUnitOfWork(fiber) {
     }
 }
 
+let wipFiber = null
+let hookIndex = null
+
 function updateFunctionComponent(fiber) {
+    wipFiber = fiber
+    hookIndex = 0
+    wipFiber.hooks = []
     const children = [fiber.type(fiber.props)];
     reconcileChildren(fiber, children);
 }
 
 function useState(initial) {
-    // const oldHook
+    const oldHook = 
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex]
+    const hook = {
+        state: oldHook ? oldHook.state : initial,
+        queue: []
+    }
+
+    const actions = oldHook ? oldHook.queue : [] 
+    actions.forEach(action => {
+        hook.state = action(hook.state);
+    })
+
+    const setState = action => {
+        hook.queue.push(action);
+        wipRoot = {
+            dom: currentRoot.dom,
+            props: currentRoot.props,
+            alternate: currentRoot
+        };
+        nextUnitOfWork = wipRoot;
+        deletions = []
+    }
+
+    wipFiber.hooks[hookIndex] = hook;
+    hookIndex++;
+    return [hook.state, setState];
 }
 
 function updateHostComponent(fiber) {
@@ -249,14 +277,22 @@ function reconcileChildren(parentFiber, elements) {
     }
 }
 
+const Didact = {
+    createElement,
+    useState,
+    render
+}
+
 
 // ===================== real app ====================
 function Counter() {
     const [state, setState] = Didact.useState(1);
+    const [state2, setState2] = Didact.useState(1);
 
     return (
-        <h1 onClick={() => setState(c => c+1)} style="user-select: none">
+        <h1 onClick={() => {setState(c => c+1); setState2(c => c+2)}} style="user-select: none">
             Count: {state}
+            Count2: {state2}
         </h1>
     )
 }
